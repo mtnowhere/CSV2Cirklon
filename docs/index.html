@@ -1,0 +1,2195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIDI to Cirklon .cki Converter</title>
+    <script>
+        (function () {
+            var p = location.pathname;
+            if (p.endsWith('/index.html')) {
+                window.__APP_BASE__ = p.slice(0, -10);
+            } else if (p.endsWith('/')) {
+                window.__APP_BASE__ = p;
+            } else {
+                var last = p.split('/').pop() || '';
+                if (last.indexOf('.') !== -1) {
+                    window.__APP_BASE__ = p.replace(/[^/]*$/, '');
+                } else {
+                    window.__APP_BASE__ = p + '/';
+                }
+            }
+            document.write(
+                '<script id="instrument-data-script" src="' +
+                    window.__APP_BASE__ +
+                    'local_instrument_data.js"><\/script>'
+            );
+        })();
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 1.1em;
+        }
+
+        select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            font-size: 16px;
+            background: white;
+            transition: all 0.3s ease;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        select:disabled {
+            background: #f8f9fa;
+            color: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            font-size: 16px;
+            background: white;
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .search-box::placeholder {
+            color: #999;
+            font-style: italic;
+        }
+
+        .search-container {
+            position: relative;
+        }
+
+        .search-clear {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            font-size: 18px;
+            display: none;
+            padding: 2px;
+        }
+
+        .search-clear:hover {
+            color: #667eea;
+        }
+
+        .search-stats {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+            font-style: italic;
+        }
+
+        .button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-block;
+            text-decoration: none;
+            margin-right: 10px;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+
+        .button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+
+        .status.loading {
+            background: #e3f2fd;
+            color: #1976d2;
+            border-left: 4px solid #2196f3;
+        }
+
+        .status.success {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border-left: 4px solid #4caf50;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+            border-left: 4px solid #f44336;
+        }
+
+        .preview {
+            margin-top: 25px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .preview h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .preview-content {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .info-box {
+            background: #f0f7ff;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* Modal Styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 15px;
+            max-width: 800px;
+            max-height: 80vh;
+            width: 90%;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+            color: white;
+            padding: 20px 30px;
+        }
+
+        .modal-header h2 {
+            margin: 0 0 10px 0;
+            font-size: 1.5em;
+            font-weight: 300;
+        }
+
+        .modal-header p {
+            margin: 0;
+            opacity: 0.9;
+        }
+
+        .modal-body {
+            padding: 20px;
+            max-height: 50vh;
+            overflow-y: auto;
+        }
+
+        .modal-footer {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            text-align: right;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .name-review-item {
+            display: grid;
+            grid-template-columns: 2fr 2fr 2fr 1fr;
+            gap: 15px;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .name-review-item:last-child {
+            border-bottom: none;
+        }
+
+        .name-review-label {
+            font-weight: 600;
+            color: #333;
+            font-size: 0.9em;
+        }
+
+        .name-review-original {
+            color: #666;
+            font-family: 'Courier New', monospace;
+            background: #f8f9fa;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .name-review-shortened {
+            color: #e67e22;
+            font-family: 'Courier New', monospace;
+            background: #fef9e7;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .name-review-input {
+            padding: 6px 8px;
+            border: 2px solid #e1e8ed;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            width: 100%;
+            max-width: 120px;
+        }
+
+        .name-review-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+        }
+
+        .name-review-header {
+            display: grid;
+            grid-template-columns: 2fr 2fr 2fr 1fr;
+            gap: 15px;
+            padding: 10px 0;
+            border-bottom: 2px solid #dee2e6;
+            margin-bottom: 10px;
+        }
+
+        .name-review-header-label {
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .char-count {
+            font-size: 0.75em;
+            color: #666;
+            margin-left: 5px;
+        }
+
+        .char-count.warning {
+            color: #e74c3c;
+            font-weight: 600;
+        }
+
+        label input[type="checkbox"] {
+            margin-right: 8px;
+        }
+
+        /* Update Data Modal Styles */
+        .update-step {
+            padding: 20px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .update-step:last-child {
+            border-bottom: none;
+        }
+
+        .update-step h3 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+
+        .file-upload-area {
+            margin: 15px 0;
+        }
+
+        .upload-dropzone {
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            background: #f8f9fa;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-dropzone:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .upload-dropzone.dragover {
+            border-color: #667eea;
+            background: #e3f2fd;
+        }
+
+        .upload-icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .upload-progress {
+            margin-top: 20px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .upload-success {
+            color: #28a745;
+            font-weight: 600;
+            text-align: center;
+            padding: 15px;
+            background: #d4edda;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+
+        .upload-error {
+            color: #dc3545;
+            font-weight: 600;
+            text-align: center;
+            padding: 15px;
+            background: #f8d7da;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+
+        /* Cirklon Parameters Grid */
+        .cirklon-params-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 1px solid #e1e8ed;
+        }
+
+        .param-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .param-group label {
+            font-size: 0.9em;
+            font-weight: 500;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+
+        .param-group select,
+        .param-group input[type="number"] {
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+            transition: all 0.3s ease;
+        }
+
+        .param-group select:focus,
+        .param-group input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+        }
+
+        .checkbox-group {
+            flex-direction: row !important;
+            align-items: center;
+            justify-content: flex-start;
+        }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0 !important;
+            cursor: pointer;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            margin-right: 8px;
+            margin-bottom: 0;
+        }
+
+        .param-group input[type="number"] {
+            width: 100%;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .cirklon-params-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>MIDI to Cirklon Converter</h1>
+            <p>Convert pencilresearch/midi CSV files to Sequentix Cirklon .cki instrument definitions</p>
+        </div>
+
+        <div class="content">
+            <div class="info-box">
+                <strong>How it works:</strong> This tool converts MIDI CC definitions from the 
+                <a href="https://github.com/pencilresearch/midi" target="_blank">pencilresearch/midi</a> 
+                repository into Cirklon .cki instrument definition files for use with the Sequentix Cirklon sequencer.
+                <br><br>
+                <strong>Local Database:</strong> Includes 279 instruments from 88 brands cached locally for instant access. 
+                Use "Update Instrument Data" to refresh with the latest data from the repository.
+                <br><br>
+                <strong>Character Limits:</strong> The tool automatically handles Cirklon's strict limits:
+                instrument names (9 chars max), CC parameter labels (6 chars max). Long names are shortened by removing 
+                spaces first, then lowercase vowels, while always preserving capital letters.
+                <br><br>
+                <strong>Name Review:</strong> Check "Review and customize parameter names" to see all shortenings and 
+                provide your own custom names before generating the .cki file.
+                <br><br>
+                <strong>Cirklon Instrument Settings:</strong> Configure MIDI port, channel, default note (C3), pattern type (P3), 
+                and other advanced options compatible with the 
+                <a href="https://gitlab.com/cirklon-community/cirklon-organizer" target="_blank">Cirklon Organizer</a> tool. 
+                Multi, Presend Program, and Poly Spread are boolean on/off settings.
+            </div>
+
+            <form id="converterForm">
+                <div class="form-group">
+                    <label for="searchBox">Search Instruments:</label>
+                    <div class="search-container">
+                        <input 
+                            type="text" 
+                            id="searchBox" 
+                            class="search-box" 
+                            placeholder="Type to search brands or models..."
+                            autocomplete="off"
+                        >
+                        <button type="button" class="search-clear" id="searchClear">×</button>
+                    </div>
+                    <div class="search-stats" id="searchStats"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="brandSelect">Select Brand:</label>
+                    <select id="brandSelect">
+                        <option value="">Loading brands...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="modelSelect">Select Model:</label>
+                    <select id="modelSelect" disabled>
+                        <option value="">Please select a brand first</option>
+                    </select>
+                </div>
+
+                <!-- Cirklon Instrument Parameters -->
+                <div class="form-group">
+                    <label style="font-weight: 600; color: #2c3e50; margin-bottom: 15px; display: block;">
+                        🎛️ Cirklon Instrument Settings
+                    </label>
+                    
+                    <div class="cirklon-params-grid">
+                        <div class="param-group">
+                            <label for="midiPort">MIDI Port:</label>
+                            <select id="midiPort">
+                                <option value="1" selected>Port 1</option>
+                                <option value="2">Port 2</option>
+                                <option value="3">Port 3</option>
+                                <option value="4">Port 4</option>
+                            </select>
+                        </div>
+                        
+                        <div class="param-group">
+                            <label for="midiChannel">MIDI Channel:</label>
+                            <select id="midiChannel">
+                                <option value="1" selected>1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                                <option value="7">7</option>
+                                <option value="8">8</option>
+                                <option value="9">9</option>
+                                <option value="10">10</option>
+                                <option value="11">11</option>
+                                <option value="12">12</option>
+                                <option value="13">13</option>
+                                <option value="14">14</option>
+                                <option value="15">15</option>
+                                <option value="16">16</option>
+                            </select>
+                        </div>
+                        
+                        <div class="param-group">
+                            <label for="defaultNote">Default Note:</label>
+                            <select id="defaultNote">
+                                <option value="36">C2 (36) - Kick drums</option>
+                                <option value="48" selected>C3 (48) - Default</option>
+                                <option value="60">C4 (60) - Middle C</option>
+                                <option value="72">C5 (72) - High notes</option>
+                                <option value="84">C6 (84) - Very high</option>
+                            </select>
+                        </div>
+                        
+                        <div class="param-group">
+                            <label for="defaultPattern">Default Pattern:</label>
+                            <select id="defaultPattern">
+                                <option value="CK">CK</option>
+                                <option value="P3" selected>P3</option>
+                            </select>
+                        </div>
+                        
+                        <div class="param-group checkbox-group">
+                            <label>
+                                <input type="checkbox" id="multi">
+                                Multi
+                            </label>
+                        </div>
+                        
+                        <div class="param-group checkbox-group">
+                            <label>
+                                <input type="checkbox" id="presendProgram">
+                                Presend Program
+                            </label>
+                        </div>
+                        
+                        <div class="param-group checkbox-group">
+                            <label>
+                                <input type="checkbox" id="polySpread">
+                                Poly Spread
+                            </label>
+                        </div>
+                        
+                        <div class="param-group checkbox-group">
+                            <label>
+                                <input type="checkbox" id="noBankL">
+                                No Bank L
+                            </label>
+                        </div>
+                        
+                        <div class="param-group checkbox-group">
+                            <label>
+                                <input type="checkbox" id="noBankM">
+                                No Bank M
+                            </label>
+                        </div>
+                        
+                        <div class="param-group checkbox-group">
+                            <label>
+                                <input type="checkbox" id="noXpose">
+                                No Xpose
+                            </label>
+                        </div>
+                        
+                        <div class="param-group checkbox-group">
+                            <label>
+                                <input type="checkbox" id="noFTS">
+                                No FTS (Force To Scale)
+                            </label>
+                        </div>
+                        
+                        <div class="param-group checkbox-group">
+                            <label>
+                                <input type="checkbox" id="showNoteNums">
+                                Show Note Nums
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="reviewNamesCheckbox" style="margin-right: 8px;">
+                        Review and customize parameter names before generating
+                    </label>
+                </div>
+
+                <button type="submit" class="button" id="convertBtn" disabled>Generate .cki File</button>
+                <button type="button" class="button" id="previewBtn" disabled>Preview</button>
+                <button type="button" class="button" id="updateDataBtn" style="background: #28a745;">Update Instrument Data</button>
+                <button type="button" class="button" id="debugBtn" style="background: #6c757d;">Debug Info</button>
+            </form>
+
+            <div id="status" class="status hidden"></div>
+
+            <div id="preview" class="preview hidden">
+                <h3>Preview of generated .cki file:</h3>
+                <div id="previewContent" class="preview-content"></div>
+                <button type="button" class="button" id="downloadBtn" style="margin-top: 15px;">Download .cki File</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Name Review Modal -->
+    <div id="nameReviewModal" class="modal hidden" style="display: none !important;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Review Parameter Names</h2>
+                <p>The following names were automatically shortened to fit Cirklon's 6-character limit. You can customize them below:</p>
+            </div>
+            <div class="modal-body">
+                <div id="nameReviewList"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="button" id="applyNamesBtn">Apply Changes & Generate</button>
+                <button type="button" class="button" id="cancelNamesBtn" style="background: #6c757d;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Data Modal -->
+    <div id="updateDataModal" class="modal hidden" style="display: none !important;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Update Instrument Data</h2>
+                <p>Download the latest data from GitHub and upload it to refresh your local database.</p>
+            </div>
+            <div class="modal-body">
+                <div class="update-step" id="downloadStep">
+                    <h3>Step 1: Download Latest Data</h3>
+                    <p>Click the button below to download the latest MIDI database from GitHub:</p>
+                    <a href="https://github.com/pencilresearch/midi/archive/refs/heads/main.zip" 
+                       target="_blank" 
+                       class="button" 
+                       style="background: #28a745; display: inline-block; text-decoration: none; margin: 10px 0;">
+                        Download midi-main.zip
+                    </a>
+                    <p style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                        This will download a ZIP file containing all instrument definitions.
+                    </p>
+                </div>
+                
+                <div class="update-step" id="uploadStep" style="margin-top: 30px;">
+                    <h3>Step 2: Upload ZIP File</h3>
+                    <p>Select the downloaded ZIP file to update your local database:</p>
+                    <div class="file-upload-area" id="fileUploadArea">
+                        <input type="file" id="zipFileInput" accept=".zip" style="display: none;">
+                        <div class="upload-dropzone" id="uploadDropzone">
+                            <div class="upload-icon">📁</div>
+                            <p>Click to select ZIP file or drag & drop</p>
+                            <p style="font-size: 0.8em; color: #666;">Accepts: .zip files</p>
+                        </div>
+                    </div>
+                    <div id="uploadProgress" class="upload-progress hidden">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <p id="progressText">Processing...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="button" id="closeUpdateBtn" style="background: #6c757d;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script>
+        class CirklonConverter {
+            constructor() {
+                this.baseUrl = 'https://api.github.com/repos/pencilresearch/midi/contents';
+                this.rawBaseUrl = 'https://raw.githubusercontent.com/pencilresearch/midi/main';
+                this.brands = [];
+                this.models = {};
+                this.currentCsvData = null;
+                this.currentCkiData = null;
+                this.usingLocalData = true;
+                this.currentGeneratingPreview = false;
+                this.initialized = false;
+                
+                this.initializeElements();
+                this.loadBrandsFromLocal();
+                this.setupEventListeners();
+                this.initialized = true;
+                
+                // Final safeguard to ensure modals are hidden
+                setTimeout(() => {
+                    if (this.nameReviewModal) {
+                        this.nameReviewModal.classList.add('hidden');
+                        this.nameReviewModal.style.display = 'none';
+                    }
+                    if (this.updateDataModal) {
+                        this.updateDataModal.classList.add('hidden');
+                        this.updateDataModal.style.display = 'none';
+                    }
+                }, 100);
+            }
+
+            initializeElements() {
+                this.searchBox = document.getElementById('searchBox');
+                this.searchClear = document.getElementById('searchClear');
+                this.searchStats = document.getElementById('searchStats');
+                this.brandSelect = document.getElementById('brandSelect');
+                this.modelSelect = document.getElementById('modelSelect');
+                this.convertBtn = document.getElementById('convertBtn');
+                this.previewBtn = document.getElementById('previewBtn');
+                this.downloadBtn = document.getElementById('downloadBtn');
+                this.updateDataBtn = document.getElementById('updateDataBtn');
+                this.debugBtn = document.getElementById('debugBtn');
+                this.reviewNamesCheckbox = document.getElementById('reviewNamesCheckbox');
+                
+                // Cirklon instrument parameters
+                this.midiPort = document.getElementById('midiPort');
+                this.midiChannel = document.getElementById('midiChannel');
+                this.defaultNote = document.getElementById('defaultNote');
+                this.defaultPattern = document.getElementById('defaultPattern');
+                this.multi = document.getElementById('multi');
+                this.presendProgram = document.getElementById('presendProgram');
+                this.polySpread = document.getElementById('polySpread');
+                this.noBankL = document.getElementById('noBankL');
+                this.noBankM = document.getElementById('noBankM');
+                this.noXpose = document.getElementById('noXpose');
+                this.noFTS = document.getElementById('noFTS');
+                this.showNoteNums = document.getElementById('showNoteNums');
+                
+                this.nameReviewModal = document.getElementById('nameReviewModal');
+                this.nameReviewList = document.getElementById('nameReviewList');
+                this.applyNamesBtn = document.getElementById('applyNamesBtn');
+                this.cancelNamesBtn = document.getElementById('cancelNamesBtn');
+                
+                // Update data modal elements
+                this.updateDataModal = document.getElementById('updateDataModal');
+                this.closeUpdateBtn = document.getElementById('closeUpdateBtn');
+                this.zipFileInput = document.getElementById('zipFileInput');
+                this.uploadDropzone = document.getElementById('uploadDropzone');
+                this.uploadProgress = document.getElementById('uploadProgress');
+                this.progressFill = document.getElementById('progressFill');
+                this.progressText = document.getElementById('progressText');
+                
+                // Ensure modals are absolutely hidden and checkbox is unchecked on initialization
+                this.nameReviewModal.classList.add('hidden');
+                this.nameReviewModal.style.display = 'none';
+                this.updateDataModal.classList.add('hidden');
+                this.updateDataModal.style.display = 'none';
+                this.reviewNamesCheckbox.checked = false;
+                this.status = document.getElementById('status');
+                this.preview = document.getElementById('preview');
+                this.previewContent = document.getElementById('previewContent');
+            }
+
+            setupEventListeners() {
+                this.searchBox.addEventListener('input', () => this.onSearchInput());
+                this.searchBox.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        this.clearSearch();
+                    }
+                });
+                this.searchClear.addEventListener('click', () => this.clearSearch());
+                
+                // Global keyboard shortcuts
+                document.addEventListener('keydown', (e) => {
+                    // Ctrl+F or Cmd+F to focus search (prevent default browser search)
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                        e.preventDefault();
+                        this.searchBox.focus();
+                        this.searchBox.select();
+                    }
+                });
+                
+                this.brandSelect.addEventListener('change', () => this.onBrandChange());
+                this.modelSelect.addEventListener('change', () => this.onModelChange());
+                this.previewBtn.addEventListener('click', () => this.previewFile());
+                this.updateDataBtn.addEventListener('click', () => this.showUpdateDataModal());
+                this.debugBtn.addEventListener('click', () => this.showDebugInfo());
+                this.applyNamesBtn.addEventListener('click', () => this.applyCustomNames());
+                this.cancelNamesBtn.addEventListener('click', () => this.hideNameReviewModal(true));
+                
+                // Update data modal event listeners
+                this.closeUpdateBtn.addEventListener('click', () => this.hideUpdateDataModal());
+                this.uploadDropzone.addEventListener('click', () => this.zipFileInput.click());
+                this.zipFileInput.addEventListener('change', (e) => this.handleFileUpload(e));
+                this.uploadDropzone.addEventListener('dragover', (e) => this.handleDragOver(e));
+                this.uploadDropzone.addEventListener('drop', (e) => this.handleFileDrop(e));
+                this.uploadDropzone.addEventListener('dragenter', (e) => this.handleDragEnter(e));
+                this.uploadDropzone.addEventListener('dragleave', (e) => this.handleDragLeave(e));
+                
+                document.getElementById('converterForm').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    if (this.initialized) {
+                        this.generateFile();
+                    }
+                });
+                this.downloadBtn.addEventListener('click', () => this.downloadFile());
+            }
+
+            showStatus(message, type = 'loading') {
+                this.status.className = `status ${type}`;
+                this.status.innerHTML = type === 'loading' ? 
+                    `<div class="loader"></div>${message}` : message;
+                this.status.classList.remove('hidden');
+            }
+
+            hideStatus() {
+                this.status.classList.add('hidden');
+            }
+
+            // Removed old GitHub API loadBrands method - now using local data only
+
+            populateBrandSelect() {
+                this.brandSelect.innerHTML = '<option value="">Choose a brand...</option>';
+                this.brands.forEach(brand => {
+                    const option = document.createElement('option');
+                    option.value = brand.path;
+                    option.textContent = brand.name;
+                    this.brandSelect.appendChild(option);
+                });
+            }
+
+            async onBrandChange() {
+                const selectedBrand = this.brandSelect.value;
+                
+                if (!selectedBrand) {
+                    this.modelSelect.innerHTML = '<option value="">Please select a brand first</option>';
+                    this.modelSelect.disabled = true;
+                    this.convertBtn.disabled = true;
+                    this.previewBtn.disabled = true;
+                    this.hidePreview();
+                    return;
+                }
+
+                if (this.usingLocalData) {
+                    // Use local data - models are already preloaded
+                    let models = this.models[selectedBrand] || [];
+                    
+                    // If there's an active search, filter the models
+                    const searchTerm = this.searchBox.value.trim();
+                    if (searchTerm) {
+                        const term = searchTerm.toLowerCase();
+                        models = models.filter(model => 
+                            model.name.toLowerCase().includes(term)
+                        );
+                    }
+                    
+                    if (models.length === 0) {
+                        const message = searchTerm 
+                            ? `No models found for ${selectedBrand} matching "${searchTerm}"`
+                            : `No models found for ${selectedBrand}`;
+                        this.showStatus(message, 'error');
+                        return;
+                    }
+                    
+                    this.populateModelSelect(models);
+                    return;
+                }
+
+                // No API-based loading in v2 - using local data only
+                this.showStatus('Brand not found in local data', 'error');
+            }
+
+            populateModelSelect(models) {
+                this.modelSelect.innerHTML = '<option value="">Choose a model...</option>';
+                models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.path;
+                    option.textContent = model.name;
+                    this.modelSelect.appendChild(option);
+                });
+                this.modelSelect.disabled = false;
+            }
+
+            onModelChange() {
+                const hasSelection = this.brandSelect.value && this.modelSelect.value;
+                this.convertBtn.disabled = !hasSelection;
+                this.previewBtn.disabled = !hasSelection;
+                this.hidePreview();
+            }
+
+            // Search functionality
+            onSearchInput() {
+                const searchTerm = this.searchBox.value.trim();
+                
+                // Show/hide clear button
+                this.searchClear.style.display = searchTerm ? 'block' : 'none';
+                
+                if (searchTerm.length === 0) {
+                    // Reset to show all brands
+                    this.populateBrandSelect(this.brands);
+                    // Restore initial search stats
+                    const totalInstruments = Object.values(this.models).reduce((sum, models) => sum + models.length, 0);
+                    this.searchStats.textContent = `${totalInstruments} instruments available across ${this.brands.length} brands`;
+                    return;
+                }
+                
+                // Filter brands and models
+                const filteredResults = this.filterInstruments(searchTerm);
+                this.displayFilteredResults(filteredResults, searchTerm);
+            }
+
+            clearSearch() {
+                this.searchBox.value = '';
+                this.searchClear.style.display = 'none';
+                
+                // Reset dropdowns to show all data
+                this.populateBrandSelect(this.brands);
+                this.modelSelect.innerHTML = '<option value="">Please select a brand first</option>';
+                this.modelSelect.disabled = true;
+                this.convertBtn.disabled = true;
+                this.previewBtn.disabled = true;
+                this.hidePreview();
+                
+                // Restore initial search stats
+                const totalInstruments = Object.values(this.models).reduce((sum, models) => sum + models.length, 0);
+                this.searchStats.textContent = `${totalInstruments} instruments available across ${this.brands.length} brands`;
+            }
+
+            filterInstruments(searchTerm) {
+                const term = searchTerm.toLowerCase();
+                const results = {
+                    matchingBrands: [],
+                    matchingModels: {},
+                    totalMatches: 0
+                };
+
+                // Check each brand and its models
+                for (const brand of this.brands) {
+                    const brandName = brand.name.toLowerCase();
+                    const brandMatches = brandName.includes(term);
+                    
+                    // Get models for this brand
+                    const brandModels = this.models[brand.name] || [];
+                    const matchingModels = brandModels.filter(model => 
+                        model.name.toLowerCase().includes(term)
+                    );
+
+                    // Include brand if it matches or has matching models
+                    if (brandMatches || matchingModels.length > 0) {
+                        results.matchingBrands.push(brand);
+                        results.matchingModels[brand.name] = brandMatches ? brandModels : matchingModels;
+                        results.totalMatches += brandMatches ? brandModels.length : matchingModels.length;
+                    }
+                }
+
+                return results;
+            }
+
+            displayFilteredResults(results, searchTerm) {
+                // Update brand select with filtered brands
+                this.populateBrandSelect(results.matchingBrands);
+                
+                // Update search stats
+                const brandCount = results.matchingBrands.length;
+                const modelCount = results.totalMatches;
+                
+                if (brandCount === 0) {
+                    this.searchStats.textContent = `No matches found for "${searchTerm}"`;
+                    this.modelSelect.innerHTML = '<option value="">No matching brands</option>';
+                    this.modelSelect.disabled = true;
+                } else {
+                    this.searchStats.textContent = `Found ${modelCount} instruments across ${brandCount} brands`;
+                    
+                    // If only one brand matches, auto-select it and show its models
+                    if (brandCount === 1) {
+                        const singleBrand = results.matchingBrands[0];
+                        const brandModels = results.matchingModels[singleBrand.name];
+                        
+                        this.brandSelect.value = singleBrand.name;
+                        this.populateModelSelect(brandModels);
+                        this.modelSelect.disabled = false;
+                        
+                        // If there's also only one model, auto-select it too
+                        if (brandModels.length === 1) {
+                            this.modelSelect.value = brandModels[0].path;
+                            console.log('Auto-selected model:', brandModels[0].name, 'with path:', brandModels[0].path);
+                            // Trigger the model change event to enable buttons
+                            this.onModelChange();
+                        }
+                    } else {
+                        this.modelSelect.innerHTML = '<option value="">Please select a brand first</option>';
+                        this.modelSelect.disabled = true;
+                    }
+                }
+                
+                // Update button states
+                const hasSelection = this.brandSelect.value && this.modelSelect.value;
+                this.convertBtn.disabled = !hasSelection;
+                this.previewBtn.disabled = !hasSelection;
+                this.hidePreview();
+            }
+
+            async loadCsvData() {
+                const selectedBrand = this.brandSelect.value;
+                const selectedModel = this.modelSelect.value;
+                
+                const model = this.models[selectedBrand].find(m => 
+                    m.path === selectedModel || m.name === selectedModel
+                );
+                if (!model) throw new Error('Model not found');
+
+                let csvText;
+                
+                if (this.usingLocalData && model.csvData) {
+                    // Use local CSV data
+                    csvText = model.csvData;
+                } else if (model.downloadUrl) {
+                    // Fetch from GitHub API
+                    const response = await fetch(model.downloadUrl);
+                    csvText = await response.text();
+                } else {
+                    throw new Error('No CSV data source available');
+                }
+                
+                return this.parseCsv(csvText);
+            }
+
+            parseCsv(csvText) {
+                // Validate input
+                if (!csvText || typeof csvText !== 'string') {
+                    throw new Error(`Invalid CSV data: expected string, got ${typeof csvText}`);
+                }
+                
+                const lines = csvText.trim().split('\n');
+                if (lines.length < 2) {
+                    throw new Error('CSV file must have at least a header row and one data row');
+                }
+                
+                const headers = lines[0].split(',').map(h => h.trim());
+                const rows = [];
+
+                for (let i = 1; i < lines.length; i++) {
+                    const values = this.parseCsvLine(lines[i]);
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        row[header] = values[index] || '';
+                    });
+                    rows.push(row);
+                }
+
+                return { headers, rows };
+            }
+
+            parseCsvLine(line) {
+                const result = [];
+                let current = '';
+                let inQuotes = false;
+                
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        result.push(current.trim());
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                
+                result.push(current.trim());
+                return result;
+            }
+
+            getCirklonOrganizerParams() {
+                // Helper function to convert MIDI note number to note name (Cirklon format)
+                const noteNumberToName = (noteNum) => {
+                    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+                    const octave = Math.floor(noteNum / 12) - 1;
+                    const noteName = noteNames[noteNum % 12];
+                    return `${noteName} ${octave}`;
+                };
+
+                return {
+                    midi_port: this.midiPort.value,
+                    midi_chan: parseInt(this.midiChannel.value),
+                    multi: this.multi.checked,
+                    preset_pgm: this.presendProgram.checked,
+                    default_note: noteNumberToName(parseInt(this.defaultNote.value)),
+                    default_patt: this.defaultPattern.value,
+                    poly_spread: this.polySpread.checked ? "on" : "off",
+                    no_bankL: this.noBankL.checked,
+                    no_bankM: this.noBankM.checked,
+                    no_xpose: this.noXpose.checked,
+                    no_fts: this.noFTS.checked,
+                    show_note_nums: this.showNoteNums.checked
+                };
+            }
+
+            convertToCki(csvData, customNameMappings = null) {
+                const brandName = this.brandSelect.options[this.brandSelect.selectedIndex].text;
+                const modelName = this.modelSelect.options[this.modelSelect.selectedIndex].text;
+                
+                console.log('convertToCki called with customNameMappings:', customNameMappings);
+                
+                // Get instrument name - use custom name if provided
+                let instrumentName;
+                if (customNameMappings) {
+                    const instrumentMapping = customNameMappings.find(m => m.type === 'instrument');
+                    instrumentName = instrumentMapping ? instrumentMapping.customName : this.sanitizeCirklonName(modelName, 9);
+                    console.log('Using custom instrument name:', instrumentName);
+                } else {
+                    instrumentName = this.sanitizeCirklonName(modelName, 9);
+                    console.log('Using auto instrument name:', instrumentName);
+                }
+                
+                // Create the Cirklon .cki JSON structure
+                const ckiData = {
+                    instrument_data: {}
+                };
+                
+                // Get Cirklon instrument parameters from form
+                const cirklonParams = this.getCirklonOrganizerParams();
+                console.log('Using Cirklon instrument parameters:', cirklonParams);
+                
+                const instrumentData = ckiData.instrument_data[instrumentName] = {
+                    CC_defs: {},
+                    track_values: {},
+                    midi_port: cirklonParams.midi_port,
+                    midi_chan: cirklonParams.midi_chan,
+                    multi: cirklonParams.multi,
+                    preset_pgm: cirklonParams.preset_pgm,
+                    default_note: cirklonParams.default_note,
+                    default_patt: cirklonParams.default_patt,
+                    poly_spread: cirklonParams.poly_spread,
+                    no_bankL: cirklonParams.no_bankL,
+                    no_bankM: cirklonParams.no_bankM,
+                    no_xpose: cirklonParams.no_xpose,
+                    no_fts: cirklonParams.no_fts,
+                    show_note_nums: cirklonParams.show_note_nums,
+                    no_thru: false
+                };
+                
+                // Add CC definitions
+                let trackValueSlot = 1;
+                csvData.rows.forEach((row, rowIndex) => {
+                    if (row.cc_msb && row.cc_msb !== '') {
+                        const ccNumber = parseInt(row.cc_msb);
+                        if (!isNaN(ccNumber)) {
+                            const rawParamName = row.parameter_name || `CC${ccNumber}`;
+                            
+                            // Use custom name if provided, otherwise use auto-shortened name
+                            let paramName;
+                            if (customNameMappings) {
+                                const mapping = customNameMappings.find(m => 
+                                    m.type === 'cc_parameter' && m.rowIndex === rowIndex
+                                );
+                                paramName = mapping ? mapping.customName : this.sanitizeCirklonName(rawParamName, 6);
+                                if (mapping) {
+                                    console.log(`CC ${ccNumber}: "${rawParamName}" → custom: "${mapping.customName}"`);
+                                }
+                            } else {
+                                paramName = this.sanitizeCirklonName(rawParamName, 6);
+                            }
+                            const minVal = parseInt(row.cc_min_value) || 0;
+                            const maxVal = parseInt(row.cc_max_value) || 127;
+                            const startVal = parseInt(row.cc_default_value) || Math.floor((minVal + maxVal) / 2);
+                            
+                            // Add to CC_defs
+                            instrumentData.CC_defs[`CC_${ccNumber}`] = {
+                                label: paramName,
+                                min_val: minVal,
+                                max_val: maxVal,
+                                start_val: startVal
+                            };
+                            
+                            console.log(`Added CC_${ccNumber} with label: "${paramName}"`);
+                            
+                            // Add to track_values for the first few CCs (Cirklon has limited track control slots)
+                            if (trackValueSlot <= 48) { // Typical Cirklon limit is around 48 track control slots
+                                instrumentData.track_values[`slot_${trackValueSlot}`] = {
+                                    MIDI_CC: ccNumber,
+                                    label: paramName
+                                };
+                                trackValueSlot++;
+                            }
+                        }
+                    }
+                });
+                
+                // Handle NRPN parameters if present (convert to CC format for Cirklon compatibility)
+                csvData.rows.forEach((row, rowIndex) => {
+                    if (row.nrpn_msb && row.nrpn_msb !== '') {
+                        const nrpnMsb = parseInt(row.nrpn_msb);
+                        const nrpnLsb = parseInt(row.nrpn_lsb) || 0;
+                        if (!isNaN(nrpnMsb)) {
+                            const rawParamName = row.parameter_name || `NRPN${nrpnMsb}`;
+                            
+                            // Use custom name if provided, otherwise use auto-shortened name
+                            let paramName;
+                            if (customNameMappings) {
+                                const mapping = customNameMappings.find(m => 
+                                    m.type === 'nrpn_parameter' && m.rowIndex === rowIndex
+                                );
+                                paramName = mapping ? mapping.customName : this.sanitizeCirklonName(rawParamName, 6);
+                            } else {
+                                paramName = this.sanitizeCirklonName(rawParamName, 6);
+                            }
+                            const minVal = parseInt(row.nrpn_min_value) || 0;
+                            const maxVal = parseInt(row.nrpn_max_value) || 16383;
+                            const startVal = parseInt(row.nrpn_default_value) || Math.floor((minVal + maxVal) / 2);
+                            
+                            // Convert NRPN to a pseudo-CC for Cirklon (using high CC numbers)
+                            const pseudoCcNumber = 200 + nrpnMsb * 10 + nrpnLsb;
+                            
+                            instrumentData.CC_defs[`CC_${pseudoCcNumber}`] = {
+                                label: paramName,
+                                min_val: Math.min(minVal, 127), // Cirklon CCs are typically 0-127
+                                max_val: Math.min(maxVal, 127),
+                                start_val: Math.min(startVal, 127)
+                            };
+                        }
+                    }
+                });
+                
+                // Add row definitions for common MIDI notes (if we have note information)
+                if (csvData.rows.some(row => row.section && row.section.toLowerCase().includes('drum'))) {
+                    instrumentData.row_defs = {};
+                    // Add some common drum note mappings
+                    const commonDrumNotes = [
+                        { note: 'C 1', label: 'Kick' },
+                        { note: 'C#1', label: 'Kick 2' },
+                        { note: 'D 1', label: 'Snare' },
+                        { note: 'D#1', label: 'Snare 2' },
+                        { note: 'E 1', label: 'Clap' },
+                        { note: 'F 1', label: 'HiHat C' },
+                        { note: 'F#1', label: 'HiHat O' },
+                        { note: 'G 1', label: 'Crash' }
+                    ];
+                    
+                    commonDrumNotes.forEach(drum => {
+                        instrumentData.row_defs[drum.note] = {
+                            label: drum.label,
+                            always_show: true
+                        };
+                    });
+                }
+                
+                // Format as JSON with proper indentation
+                const result = JSON.stringify(ckiData, null, '\t');
+                
+                if (customNameMappings) {
+                    console.log('=== FINAL .CKI CONTENT (with custom names) ===');
+                    console.log('Instrument name in JSON:', instrumentName);
+                    const ccLabels = Object.keys(instrumentData.CC_defs).map(ccKey => 
+                        `${ccKey}: "${instrumentData.CC_defs[ccKey].label}"`
+                    );
+                    console.log('CC labels in final JSON:', ccLabels.slice(0, 10)); // Show first 10
+                }
+                
+                return result;
+            }
+
+            async previewFile() {
+                // Validate selection first
+                if (!this.validateSelection()) {
+                    return;
+                }
+                
+                try {
+                    this.showStatus('Loading CSV data...');
+                    this.currentGeneratingPreview = true;
+                    
+                    this.currentCsvData = await this.loadCsvData();
+                    
+                    if (this.reviewNamesCheckbox.checked) {
+                        this.showNameReviewModal();
+                    } else {
+                        this.generatePreview();
+                    }
+                    
+                } catch (error) {
+                    this.showStatus('Error loading data: ' + error.message, 'error');
+                }
+            }
+
+            validateSelection() {
+                if (!this.brandSelect?.value) {
+                    this.showStatus('Please select a brand first', 'error');
+                    return false;
+                }
+                
+                if (!this.modelSelect?.value) {
+                    this.showStatus('Please select a model first', 'error');
+                    return false;
+                }
+                
+                return true;
+            }
+
+            generatePreview(customNameMappings = null) {
+                try {
+                    this.showStatus('Generating preview...');
+                    console.log('generatePreview called with custom mappings:', customNameMappings ? 'YES' : 'NO');
+                    
+                    // Use custom name mappings if provided, otherwise use any existing ones
+                    const nameMappings = customNameMappings || this.currentNameMappings;
+                    this.currentCkiData = this.convertToCki(this.currentCsvData, nameMappings);
+                    
+                    this.previewContent.textContent = this.currentCkiData;
+                    this.preview.classList.remove('hidden');
+                    this.hideStatus();
+                } catch (error) {
+                    this.showStatus('Error generating preview: ' + error.message, 'error');
+                }
+            }
+
+            async generateFile() {
+                // Validate selection first
+                if (!this.validateSelection()) {
+                    return;
+                }
+                
+                try {
+                    this.showStatus('Loading CSV data...');
+                    this.currentGeneratingPreview = false;
+                    
+                    if (!this.currentCsvData) {
+                        this.currentCsvData = await this.loadCsvData();
+                    }
+                    
+                    if (this.reviewNamesCheckbox.checked) {
+                        this.showNameReviewModal();
+                    } else {
+                        this.proceedWithGeneration();
+                    }
+                    
+                } catch (error) {
+                    this.showStatus('Error loading data: ' + error.message, 'error');
+                }
+            }
+
+            proceedWithGeneration(customNameMappings = null) {
+                try {
+                    this.showStatus('Generating .cki file...');
+                    console.log('proceedWithGeneration called with mappings:', customNameMappings ? 'YES' : 'NO');
+                    this.currentCkiData = this.convertToCki(this.currentCsvData, customNameMappings);
+                    this.downloadFile();
+                    this.showStatus('File generated successfully!', 'success');
+                } catch (error) {
+                    this.showStatus('Error generating file: ' + error.message, 'error');
+                }
+            }
+
+            downloadFile() {
+                if (!this.currentCkiData) {
+                    this.showStatus('No file data available. Please generate the file first.', 'error');
+                    return;
+                }
+                
+                console.log('Downloading file with data length:', this.currentCkiData.length);
+                
+                const brandName = this.brandSelect.options[this.brandSelect.selectedIndex].text;
+                const modelName = this.modelSelect.options[this.modelSelect.selectedIndex].text;
+                const filename = `${brandName}_${modelName}.cki`.replace(/\s+/g, '_');
+                
+                const blob = new Blob([this.currentCkiData], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            hidePreview() {
+                this.preview.classList.add('hidden');
+                this.currentCsvData = null;
+                this.currentCkiData = null;
+            }
+
+
+            async showDebugInfo() {
+                try {
+                    this.showStatus('Fetching debug information...');
+                    
+                    const response = await fetch(this.baseUrl);
+                    const responseText = await response.text();
+                    
+                    let debugInfo = `Debug Information:\n\n`;
+                    debugInfo += `URL: ${this.baseUrl}\n`;
+                    debugInfo += `Status: ${response.status} ${response.statusText}\n`;
+                    debugInfo += `Response Headers:\n`;
+                    
+                    for (let [key, value] of response.headers.entries()) {
+                        debugInfo += `  ${key}: ${value}\n`;
+                    }
+                    
+                    debugInfo += `\nResponse Body (first 500 chars):\n`;
+                    debugInfo += responseText.substring(0, 500);
+                    
+                    if (responseText.length > 500) {
+                        debugInfo += '\n... (truncated)';
+                    }
+                    
+                    // Try to parse as JSON to see the structure
+                    try {
+                        const jsonData = JSON.parse(responseText);
+                        debugInfo += `\n\nParsed JSON type: ${Array.isArray(jsonData) ? 'Array' : typeof jsonData}`;
+                        if (Array.isArray(jsonData)) {
+                            debugInfo += `\nArray length: ${jsonData.length}`;
+                            if (jsonData.length > 0) {
+                                debugInfo += `\nFirst item keys: ${Object.keys(jsonData[0]).join(', ')}`;
+                            }
+                        } else if (typeof jsonData === 'object') {
+                            debugInfo += `\nObject keys: ${Object.keys(jsonData).join(', ')}`;
+                        }
+                    } catch (e) {
+                        debugInfo += `\nJSON parse error: ${e.message}`;
+                    }
+                    
+                    alert(debugInfo);
+                    this.hideStatus();
+                    
+                } catch (error) {
+                    this.showStatus(`Debug fetch failed: ${error.message}`, 'error');
+                }
+            }
+
+            loadBrandsFromLocal() {
+                try {
+                    this.showStatus('Loading local instrument database...', 'loading');
+                    
+                    // Check if LOCAL_INSTRUMENT_DATA exists
+                    if (typeof LOCAL_INSTRUMENT_DATA === 'undefined') {
+                        throw new Error('Local instrument data not available');
+                    }
+                    
+                    // Extract brands from local data
+                    this.brands = Object.keys(LOCAL_INSTRUMENT_DATA)
+                        .map(brandName => ({
+                            name: brandName,
+                            path: brandName
+                        }))
+                        .sort((a, b) => a.name.localeCompare(b.name));
+                    
+                    // Preload all models for instant access
+                    this.models = {};
+                    for (const [brandName, brandModels] of Object.entries(LOCAL_INSTRUMENT_DATA)) {
+                        this.models[brandName] = Object.keys(brandModels)
+                            .map(modelName => {
+                                const modelData = brandModels[modelName];
+                                
+                                // Handle both old format (string) and new format (object with csvData property)
+                                let csvData;
+                                if (typeof modelData === 'string') {
+                                    // Old format: CSV data is stored directly as string
+                                    csvData = modelData;
+                                } else if (modelData && typeof modelData === 'object' && modelData.csvData) {
+                                    // New format: CSV data is in csvData property
+                                    csvData = modelData.csvData;
+                                } else {
+                                    console.warn(`Invalid data format for ${brandName}/${modelName}:`, modelData);
+                                    csvData = '';
+                                }
+                                
+                                return {
+                                    name: modelName,
+                                    path: `${brandName}/${modelName}`,
+                                    downloadUrl: null, // Local data doesn't need download URLs
+                                    csvData: csvData // Store CSV data as string
+                                };
+                            })
+                            .sort((a, b) => a.name.localeCompare(b.name));
+                    }
+                    
+                    this.populateBrandSelect();
+                    this.hideStatus();
+                    
+                    const totalInstruments = Object.values(this.models).reduce((sum, models) => sum + models.length, 0);
+                    console.log(`✅ Loaded ${this.brands.length} brands with ${totalInstruments} instruments from local cache`);
+                    
+                    // Initialize search stats
+                    this.searchStats.textContent = `${totalInstruments} instruments available across ${this.brands.length} brands`;
+                    
+                } catch (error) {
+                    console.error('Local data loading failed:', error);
+                    this.showStatus('Local data unavailable. Please use "Update Instrument Data" to refresh your database.', 'error');
+                }
+            }
+
+            // New update data functionality
+            showUpdateDataModal() {
+                this.updateDataModal.classList.remove('hidden');
+                this.updateDataModal.style.display = 'flex';
+                
+                // Reset upload state
+                this.uploadProgress.classList.add('hidden');
+                this.progressFill.style.width = '0%';
+                this.progressText.textContent = 'Processing...';
+                
+                // Clear any previous file selection
+                this.zipFileInput.value = '';
+                this.uploadDropzone.innerHTML = `
+                    <div class="upload-icon">📁</div>
+                    <p>Click to select ZIP file or drag & drop</p>
+                    <p style="font-size: 0.8em; color: #666;">Accepts: .zip files</p>
+                `;
+            }
+
+            hideUpdateDataModal() {
+                this.updateDataModal.classList.add('hidden');
+                this.updateDataModal.style.display = 'none';
+            }
+
+            handleDragOver(e) {
+                e.preventDefault();
+                this.uploadDropzone.classList.add('dragover');
+            }
+
+            handleDragEnter(e) {
+                e.preventDefault();
+                this.uploadDropzone.classList.add('dragover');
+            }
+
+            handleDragLeave(e) {
+                e.preventDefault();
+                // Only remove dragover if we're leaving the dropzone itself
+                if (!this.uploadDropzone.contains(e.relatedTarget)) {
+                    this.uploadDropzone.classList.remove('dragover');
+                }
+            }
+
+            handleFileDrop(e) {
+                e.preventDefault();
+                this.uploadDropzone.classList.remove('dragover');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    this.processUploadedFile(files[0]);
+                }
+            }
+
+            handleFileUpload(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    this.processUploadedFile(file);
+                }
+            }
+
+            async processUploadedFile(file) {
+                if (!file.name.endsWith('.zip')) {
+                    this.showUploadError('Please select a ZIP file.');
+                    return;
+                }
+
+                try {
+                    // Show progress
+                    this.uploadProgress.classList.remove('hidden');
+                    this.progressText.textContent = 'Reading ZIP file...';
+                    this.progressFill.style.width = '10%';
+
+                    // Read the ZIP file
+                    const zip = new JSZip();
+                    const zipContent = await zip.loadAsync(file);
+                    
+                    this.progressText.textContent = 'Processing CSV files...';
+                    this.progressFill.style.width = '30%';
+
+                    // Process the ZIP content
+                    const instrumentData = await this.extractInstrumentData(zipContent);
+                    
+                    this.progressText.textContent = 'Generating new local data file...';
+                    this.progressFill.style.width = '80%';
+
+                    // Generate new local_instrument_data.js content
+                    const newDataContent = this.generateLocalDataFile(instrumentData);
+                    
+                    this.progressText.textContent = 'Updating application...';
+                    this.progressFill.style.width = '95%';
+
+                    // Apply the new data
+                    await this.applyNewInstrumentData(newDataContent);
+                    
+                    this.progressFill.style.width = '100%';
+                    this.progressText.textContent = 'Update completed successfully!';
+                    
+                    setTimeout(() => {
+                        this.showUploadSuccess(`Successfully updated with ${Object.keys(instrumentData).length} brands and ${Object.values(instrumentData).reduce((sum, brand) => sum + Object.keys(brand).length, 0)} instruments!`);
+                    }, 500);
+
+                } catch (error) {
+                    console.error('Error processing ZIP file:', error);
+                    this.showUploadError(`Error processing file: ${error.message}`);
+                }
+            }
+
+            async extractInstrumentData(zipContent) {
+                const instrumentData = {};
+                let processedFiles = 0;
+                
+                // Count valid CSV files (excluding metadata)
+                const totalFiles = Object.keys(zipContent.files).filter(path => 
+                    path.endsWith('.csv') && 
+                    !path.includes('._') && 
+                    !path.includes('__MACOSX') &&
+                    !path.split('/').pop().startsWith('._')
+                ).length;
+
+                for (const [path, file] of Object.entries(zipContent.files)) {
+                    // Skip directories and non-CSV files
+                    if (file.dir || !path.endsWith('.csv')) continue;
+                    
+                    // Skip macOS metadata files (starting with ._ or __MACOSX)
+                    if (path.includes('._') || path.includes('__MACOSX')) continue;
+                    
+                    // Extract brand and model from path (e.g., "midi-main/Moog/Subsequent 37.csv")
+                    const pathParts = path.split('/');
+                    if (pathParts.length < 3) continue; // Skip root level files
+                    
+                    const brand = pathParts[pathParts.length - 2]; // Second to last is brand
+                    const fileName = pathParts[pathParts.length - 1]; // Last is filename
+                    const modelName = fileName.replace('.csv', '');
+                    
+                    // Skip files that start with ._ (more macOS metadata)
+                    if (fileName.startsWith('._')) continue;
+
+                    try {
+                        // Read CSV content
+                        const csvContent = await file.async('text');
+                        
+                        // Initialize brand if needed
+                        if (!instrumentData[brand]) {
+                            instrumentData[brand] = {};
+                        }
+
+                        // Store the CSV data
+                        instrumentData[brand][modelName] = {
+                            name: modelName,
+                            path: modelName,
+                            csvData: csvContent
+                        };
+
+                        processedFiles++;
+                        
+                        // Update progress
+                        const progress = 30 + (processedFiles / totalFiles) * 50; // 30% to 80%
+                        this.progressFill.style.width = `${progress}%`;
+                        
+                    } catch (error) {
+                        console.warn(`Failed to process ${path}:`, error);
+                    }
+                }
+
+                return instrumentData;
+            }
+
+            generateLocalDataFile(instrumentData) {
+                const formattedData = {};
+                
+                for (const [brand, models] of Object.entries(instrumentData)) {
+                    formattedData[brand] = {};
+                    for (const [modelName, modelData] of Object.entries(models)) {
+                        // Store CSV data directly as string for compatibility
+                        formattedData[brand][modelName] = modelData.csvData;
+                    }
+                }
+
+                return `// Auto-generated local instrument data for Cirklon Converter
+// Generated on: ${new Date().toISOString()}
+// Total brands: ${Object.keys(formattedData).length}
+// Total instruments: ${Object.values(formattedData).reduce((sum, brand) => sum + Object.keys(brand).length, 0)}
+
+const LOCAL_INSTRUMENT_DATA = ${JSON.stringify(formattedData, null, 2)};`;
+            }
+
+            async applyNewInstrumentData(newDataContent) {
+                const newScript = document.createElement('script');
+                newScript.id = 'instrument-data-script';
+                newScript.textContent = newDataContent;
+
+                const oldScript = document.getElementById('instrument-data-script');
+                if (oldScript) {
+                    oldScript.remove();
+                }
+
+                document.head.appendChild(newScript);
+                
+                // Reload the data in the application
+                this.loadBrandsFromLocal();
+                
+                // Trigger a download of the new data file for the user
+                const blob = new Blob([newDataContent], { type: 'application/javascript' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'local_instrument_data.js';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            showUploadSuccess(message) {
+                const successDiv = document.createElement('div');
+                successDiv.className = 'upload-success';
+                successDiv.innerHTML = `✅ ${message}`;
+                
+                const modalBody = this.updateDataModal.querySelector('.modal-body');
+                modalBody.appendChild(successDiv);
+                
+                // Auto-close after 3 seconds
+                setTimeout(() => {
+                    this.hideUpdateDataModal();
+                }, 3000);
+            }
+
+            showUploadError(message) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'upload-error';
+                errorDiv.innerHTML = `❌ ${message}`;
+                
+                // Remove any existing error messages
+                const existingError = this.updateDataModal.querySelector('.upload-error');
+                if (existingError) {
+                    existingError.remove();
+                }
+                
+                const modalBody = this.updateDataModal.querySelector('.modal-body');
+                modalBody.appendChild(errorDiv);
+                
+                // Hide progress
+                this.uploadProgress.classList.add('hidden');
+            }
+
+            sanitizeCirklonName(name, maxLength) {
+                if (!name) return '';
+                
+                // Cirklon allowed characters: [-A-Za-z0-9()#. $@!&+{}*]
+                const allowedChars = /[-A-Za-z0-9()#. $@!&+{}*]/g;
+                
+                // Extract only allowed characters first
+                let sanitized = name.match(allowedChars);
+                if (!sanitized) return maxLength >= 5 ? 'Param' : 'Ctrl'; // fallback
+                
+                sanitized = sanitized.join('');
+                
+                // If already within length limit, return as-is
+                if (sanitized.length <= maxLength) {
+                    return sanitized || (maxLength >= 5 ? 'Param' : 'Ctrl');
+                }
+                
+                let shortened = sanitized;
+                
+                // Step 1: Remove spaces first
+                while (shortened.length > maxLength && shortened.includes(' ')) {
+                    const index = shortened.indexOf(' ');
+                    shortened = shortened.slice(0, index) + shortened.slice(index + 1);
+                }
+                
+                // If still too long after removing spaces, remove lowercase vowels
+                // Always preserve capital letters (A-Z) and all consonants
+                if (shortened.length > maxLength) {
+                    const lowercaseVowels = ['a', 'e', 'i', 'o', 'u'];
+                    
+                    for (const vowel of lowercaseVowels) {
+                        while (shortened.length > maxLength && shortened.includes(vowel)) {
+                            const index = shortened.indexOf(vowel);
+                            shortened = shortened.slice(0, index) + shortened.slice(index + 1);
+                        }
+                        if (shortened.length <= maxLength) break;
+                    }
+                }
+                
+                // If still too long, truncate (this preserves capitals at the beginning)
+                if (shortened.length > maxLength) {
+                    shortened = shortened.substring(0, maxLength);
+                }
+                
+                // If empty after processing, provide a default
+                if (!shortened.trim()) {
+                    shortened = maxLength >= 5 ? 'Param' : 'Ctrl';
+                }
+                
+                return shortened;
+            }
+
+            showNameReviewModal() {
+                // Prevent modal from showing during initialization
+                if (!this.initialized) {
+                    return;
+                }
+                
+                if (!this.currentCsvData) {
+                    this.showStatus('No CSV data available for review', 'error');
+                    return;
+                }
+                
+                this.showStatus('Analyzing parameter names...');
+                
+                // Collect all the name shortenings that will happen
+                const nameMappings = this.collectNameMappings();
+                
+                if (nameMappings.length === 0) {
+                    this.showStatus('No parameter names need shortening', 'success');
+                    setTimeout(() => {
+                        if (this.currentGeneratingPreview) {
+                            this.generatePreview(null); // No custom mappings needed
+                        } else {
+                            this.proceedWithGeneration(null); // No custom mappings needed
+                        }
+                    }, 1000);
+                    return;
+                }
+                
+                this.populateNameReviewModal(nameMappings);
+                this.nameReviewModal.classList.remove('hidden');
+                this.nameReviewModal.style.display = 'flex';
+                this.hideStatus();
+            }
+
+            collectNameMappings() {
+                const mappings = [];
+                
+                // Check instrument name
+                const brandName = this.brandSelect.options[this.brandSelect.selectedIndex].text;
+                const modelName = this.modelSelect.options[this.modelSelect.selectedIndex].text;
+                const originalInstrumentName = `${brandName} ${modelName}`;
+                const shortenedInstrumentName = this.sanitizeCirklonName(modelName, 9);
+                
+                if (originalInstrumentName !== shortenedInstrumentName) {
+                    mappings.push({
+                        type: 'instrument',
+                        original: originalInstrumentName,
+                        shortened: shortenedInstrumentName,
+                        customName: shortenedInstrumentName,
+                        maxLength: 9
+                    });
+                }
+                
+                // Check CC parameter names
+                this.currentCsvData.rows.forEach((row, index) => {
+                    if (row.cc_msb && row.cc_msb !== '') {
+                        const originalName = row.parameter_name || `CC${row.cc_msb}`;
+                        const shortenedName = this.sanitizeCirklonName(originalName, 6);
+                        
+                        if (originalName !== shortenedName) {
+                            mappings.push({
+                                type: 'cc_parameter',
+                                original: originalName,
+                                shortened: shortenedName,
+                                customName: shortenedName,
+                                ccNumber: parseInt(row.cc_msb),
+                                maxLength: 6,
+                                rowIndex: index
+                            });
+                        }
+                    }
+                });
+
+                // Check NRPN parameter names
+                this.currentCsvData.rows.forEach((row, index) => {
+                    if (row.nrpn_msb && row.nrpn_msb !== '') {
+                        const originalName = row.parameter_name || `NRPN${row.nrpn_msb}`;
+                        const shortenedName = this.sanitizeCirklonName(originalName, 6);
+                        
+                        if (originalName !== shortenedName) {
+                            mappings.push({
+                                type: 'nrpn_parameter',
+                                original: originalName,
+                                shortened: shortenedName,
+                                customName: shortenedName,
+                                nrpnMsb: parseInt(row.nrpn_msb),
+                                nrpnLsb: parseInt(row.nrpn_lsb || '0'),
+                                maxLength: 6,
+                                rowIndex: index
+                            });
+                        }
+                    }
+                });
+                
+                return mappings;
+            }
+
+            populateNameReviewModal(mappings) {
+                let html = `
+                    <div class="name-review-header">
+                        <div class="name-review-header-label">Original Name</div>
+                        <div class="name-review-header-label">Auto-Shortened</div>
+                        <div class="name-review-header-label">Custom Name</div>
+                        <div class="name-review-header-label">Type</div>
+                    </div>
+                `;
+                
+                mappings.forEach((mapping, index) => {
+                    const typeLabel = mapping.type === 'instrument' ? 'Instrument' : 
+                                    mapping.type === 'cc_parameter' ? `CC ${mapping.ccNumber}` :
+                                    `NRPN ${mapping.nrpnMsb}:${mapping.nrpnLsb}`;
+                    
+                    html += `
+                        <div class="name-review-item">
+                            <div class="name-review-original">${mapping.original}</div>
+                            <div class="name-review-shortened">${mapping.shortened}</div>
+                            <div>
+                                <input 
+                                    type="text" 
+                                    class="name-review-input" 
+                                    data-index="${index}"
+                                    maxlength="${mapping.maxLength}"
+                                    value="${mapping.customName}"
+                                    placeholder="Custom name"
+                                >
+                                <span class="char-count" id="count-${index}">
+                                    ${mapping.customName.length}/${mapping.maxLength}
+                                </span>
+                            </div>
+                            <div class="name-review-label">${typeLabel}</div>
+                        </div>
+                    `;
+                });
+                
+                this.nameReviewList.innerHTML = html;
+                this.currentNameMappings = mappings;
+                
+                // Add input event listeners for character counting
+                const inputs = this.nameReviewList.querySelectorAll('.name-review-input');
+                inputs.forEach((input, index) => {
+                    input.addEventListener('input', () => {
+                        const count = input.value.length;
+                        const maxLength = mappings[index].maxLength;
+                        const counter = document.getElementById(`count-${index}`);
+                        
+                        counter.textContent = `${count}/${maxLength}`;
+                        counter.className = count > maxLength ? 'char-count warning' : 'char-count';
+                        
+                        // Update the mapping
+                        mappings[index].customName = input.value;
+                        console.log(`Input updated: ${mappings[index].original} → "${input.value}"`);
+                    });
+                });
+            }
+
+            hideNameReviewModal(clearMappings = true) {
+                this.nameReviewModal.classList.add('hidden');
+                this.nameReviewModal.style.display = 'none';
+                if (clearMappings) {
+                    console.log('Clearing currentNameMappings');
+                    this.currentNameMappings = null;
+                } else {
+                    console.log('Keeping currentNameMappings for processing');
+                }
+            }
+
+            applyCustomNames() {
+                console.log('=== APPLYING CUSTOM NAMES ===');
+                
+                // Check if we have valid data
+                if (!this.currentNameMappings) {
+                    console.error('No currentNameMappings available!');
+                    this.showStatus('Error: No name mappings found', 'error');
+                    return;
+                }
+                
+                if (!this.currentCsvData) {
+                    console.error('No currentCsvData available!');
+                    this.showStatus('Error: No CSV data available', 'error');
+                    return;
+                }
+                
+                console.log('Current name mappings available:', this.currentNameMappings.length);
+                
+                // First, collect the current values from all input fields
+                const inputs = this.nameReviewList.querySelectorAll('.name-review-input');
+                console.log('Found', inputs.length, 'input fields');
+                
+                inputs.forEach((input, index) => {
+                    if (this.currentNameMappings[index]) {
+                        console.log(`Collecting input ${index}: "${input.value}" for "${this.currentNameMappings[index].original}"`);
+                        this.currentNameMappings[index].customName = input.value;
+                    }
+                });
+                
+                // Validate all names are within character limits
+                const invalidNames = this.currentNameMappings.filter(mapping => 
+                    mapping.customName.length > mapping.maxLength || mapping.customName.trim() === ''
+                );
+                
+                if (invalidNames.length > 0) {
+                    alert(`Please fix the following names:\n${invalidNames.map(n => {
+                        if (n.customName.trim() === '') {
+                            return `${n.original} - Name cannot be empty`;
+                        }
+                        return `${n.original} - Name too long (${n.customName.length}/${n.maxLength} characters)`;
+                    }).join('\n')}`);
+                    return;
+                }
+                
+                console.log('Applying custom names:', this.currentNameMappings.map(m => `${m.original} → ${m.customName}`));
+                
+                // Generate using custom names
+                try {
+                    this.showStatus('Generating with custom names...');
+                    
+                    console.log('=== CONVERTING WITH CUSTOM NAMES ===');
+                    console.log('Custom mappings count:', this.currentNameMappings.length);
+                    console.log('CSV data available:', !!this.currentCsvData);
+                    console.log('CSV data rows:', this.currentCsvData ? this.currentCsvData.length : 'N/A');
+                    
+                    console.log('About to call convertToCki with:');
+                    console.log('- csvData:', this.currentCsvData ? `${this.currentCsvData.length} rows` : 'null');
+                    console.log('- customNameMappings:', this.currentNameMappings ? `${this.currentNameMappings.length} mappings` : 'null');
+                    
+                    this.currentCkiData = this.convertToCki(this.currentCsvData, this.currentNameMappings);
+                    
+                    console.log('Generated .cki data length:', this.currentCkiData.length);
+                    console.log('First 500 chars of .cki:', this.currentCkiData.substring(0, 500));
+                    
+                    // Always ensure we download/show the file with custom names
+                    if (this.currentGeneratingPreview) {
+                        // Show preview
+                        console.log('Showing preview with custom names');
+                        this.previewContent.textContent = this.currentCkiData;
+                        this.preview.classList.remove('hidden');
+                        this.hideStatus();
+                    } else {
+                        // Download file directly - don't call any other functions that might regenerate data
+                        console.log('Downloading file with custom names directly');
+                        console.log('About to download - currentCkiData contains custom names:', 
+                            this.currentCkiData.includes(this.currentNameMappings[0]?.customName || 'TEST'));
+                        this.downloadFile();
+                        this.showStatus('File generated successfully with custom names!', 'success');
+                    }
+                    
+                    // Hide the modal after processing (and clear mappings)
+                    this.hideNameReviewModal(true);
+                } catch (error) {
+                    console.error('Error in applyCustomNames:', error);
+                    this.showStatus('Error generating with custom names: ' + error.message, 'error');
+                }
+            }
+        }
+
+        // Initialize the converter when the page loads
+        let converterInstance = null;
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!converterInstance) {
+                converterInstance = new CirklonConverter();
+            }
+        });
+    </script>
+</body>
+</html>
